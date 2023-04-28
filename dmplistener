@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+
+import os
+import socketserver
+import json
+import uuid
+import copy
+import sys
+import argparse
+from argparse import ArgumentParser
+from dmplib import dmpparser
+from dmplib import dmputils
+from dmplib import dmpdb
+
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+
+# Handle an incoming DMP Panel Report client connection
+class PanelReportHandler(socketserver.StreamRequestHandler):
+
+    def handle(self):
+        clientip = self.client_address[0]
+        clientport = self.client_address[1]
+        dmputils.debugPrint(f"Incoming Connection From {clientip}:{clientport}")
+
+        while True:
+
+            data = self.connection.recv(1024)
+
+            if not data:
+                self.connection.close()
+                dmputils.debugPrint("Connection Closed")
+                break
+
+            # I thought up pedantic ways to make sure this is absolutely unique. Turns out it's unneeded. Just use uuid1().
+            # If two connecitons come in the same 100ns (.0001ms) window, there is a 1/16383 chance of a dupicate. If we're
+            # running on multiple hosts, we don't need to worry about inter-host duplicates because the host MAC address is part
+            # of the uuid. Also, the uuid field in the DB is uniq, so the signal won't get stored and this will throw an exception.
+            # The panel will never get an ack, and will keep trying that signal, so it will get a new uuid, and then it'll go through.
+            # We're never going to get a duplicate. Just use uuid1().
+            signal_uuid = uuid.uuid1()
+
+            dmputils.debugPrint(f"UUID for this signal '{str(signal_uuid)}")
+
+            #self.rfile.readline()
+            dmputils.debugPrint("Data Received:")
+            dmputils.debugPrint(f"String: '{data}'")
+            dmputils.debugPrint(f"Hexadecimal: {data.hex(' ')}")
+
+            # Strip control chars from signal string and convert it from bytes
+            mapping =  dict.fromkeys(range(32))
+            sigstr = str(data.decode()).translate(mapping)
+
+            # Break signal string into list with DMP's chosen delimiter
+            siglist = sigstr.split("\\")
+
+            # The first item in the signal string needs to be broken up further
+            firstpart = siglist[0]
+            sigcrc = firstpart[0:0+4]
+            sigindex = firstpart[4:4+2]
+            sigacct = firstpart[6:6+5]
+            if "&" in firstpart:
+                index = firstpart.index("&")
+                sigminago = firstpart[index + 1 : index + 6]
+            else:
+                sigminago = 0
+            sigevent = firstpart[-2:]
+
+            # Replace the first item in the siglist with the signal event. This creates a new list with just the serial3 message parts
+            siglist[0] = sigevent
+
+            signaldict = {
+                'uuid' : str(signal_uuid),
+                'crc' : sigcrc,
+                'index' : sigindex,
+                'acct' : sigacct,
+                'minago' : sigminago,
+                'msg' : siglist,
+                'rawmsg' : str(data.decode()),
+                'ip' : clientip,
+                'port' : clientport,
+            }
+
+            # Run the signal's message though the parser
+            signaldict['msgdict'] = dmpparser.parseMessage(copy.copy(signaldict['msg']))
+
+            dmputils.debugPrint(f"signaldict\n{json.dumps(signaldict, indent = 4)}")
+            #ret = self.insertDbRecord(signaldict)
+            ret = dmpdb.insertDbRecord(signaldict, self.server.dbauth)
+            if ret:
+                dmputils.debugPrint(f"Successfully inserted signal to DB")
+                self.wfile.write(b'\x02' + signaldict["acct"].encode() + b'\x06' + b'\x0D')
+                print(f"Processed '{sigevent}' from account '{signaldict['acct'].strip().zfill(5)}'.")
+            dmputils.debugPrint(ret)
+
+# Handle environment variables, and set defaults for the argument parser
+ENV_LISTEN_IP = os.getenv("LISTEN_IP", "0.0.0.0")
+ENV_LISTEN_PORT = os.getenv("LISTEN_PORT", "2001")
+ENV_DB_HOST = os.getenv("DB_HOST", "localhost")
+ENV_DB_USER = os.getenv("DB_USER", "dmpreportuser")
+ENV_DB_DATABASE = os.getenv("DB_DATABASE", "dmpreports")
+ENV_DB_PASSWORD = os.getenv("DB_PASSWORD")
+ENV_DMPDEBUG = os.getenv("DMPDEBUG", "")
+debug_bool = ENV_DMPDEBUG.upper() in ['TRUE', 'YES', "1"]
+
+# Handle Command Line Arguments.
+parser = ArgumentParser(
+    description="Listens via TCP port for DMP panels to connect with PC Log Reports.\nThese are saved to a MariaDB/MySql database.\n"
+    "See the schema.sql file in the source distribution for the table schema.",
+    epilog=f"These settings can also be set via environment variables, as listed in capital letters above.\n\nExamples:\n"
+    f"{sys.argv[0]} -L 192.168.1.122 -T 2002 -H 192.168.1.100 -D dmpreports2 -U myuser -P mypassword\n"
+    f"LISTEN_IP=192.168.1.122 LISTEN_PORT=2002 DB_HOST=192.168.1.100 DB_DATABASE=dmpreports2 DB_USER=myuser DB_PASSWORD=mypassword {sys.argv[0]}\n"
+    f"DEBUG=TRUE {sys.argv[0]}",
+    formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+parser.add_argument("-L", "--listenaddr", dest="LISTEN_IP", default=ENV_LISTEN_IP, help="The IP address to listen on. Default: 0.0.0.0 [all]")
+parser.add_argument("-T", "--tcpport", dest="LISTEN_PORT", default=ENV_LISTEN_PORT, help="The TCP Port to listen on. Default: 2001")
+parser.add_argument("-H", "--db-host", dest="DB_HOST", default=ENV_DB_HOST, help="The host/ip of the MariaDB/Mysql server")
+parser.add_argument("-D", "--db_databse", dest="DB_DATABASE", default=ENV_DB_DATABASE, help="The database to use when connecting to the MariaDB/Mysql server")
+parser.add_argument("-U", "--db_user", dest="DB_USER", default=ENV_DB_USER, help="The username to use when connecting to the MariaDB/Mysql server")
+parser.add_argument("-P", "--db-password", dest="DB_PASSWORD", default=ENV_DB_PASSWORD, help="The password to use when connecting to the MariaDB/Mysql server")
+parser.add_argument("--debug", dest='debug', action='store_true', default=debug_bool, help="Turns on Debug messages")
+args = parser.parse_args()
+
+# Check if the DB password is empty. It's a requirement.
+if not args.DB_PASSWORD:
+    print(f"The database password is required. Check your arguments or environment variables.\n\n######## Try: {sys.argv[0]} --help ########\n")
+    parser.print_usage()
+    quit()
+
+# Set or reset the DMPDEBUG environment variable.
+if args.debug:
+    os.environ["DMPDEBUG"] = "TRUE"
+    dmputils.debugPrint("Debug Output Enabled")
+else:
+    os.environ["DMPDEBUG"] = ""
+
+# Test the DB connection
+if dmputils.testDbConnection(args.DB_HOST, args.DB_DATABASE, args.DB_USER, args.DB_PASSWORD):
+    pass
+else:
+    print("Error connecting to the DB")
+    quit()
+
+dbauth = [args.DB_HOST, args.DB_USER, args.DB_PASSWORD, args.DB_DATABASE]
+
+ServerAddress = (args.LISTEN_IP, int(args.LISTEN_PORT))
+
+print(f"Listening on {ServerAddress[0]}:{ServerAddress[1]}")
+
+TCPServerInstance = socketserver.ThreadingTCPServer(ServerAddress, PanelReportHandler)
+TCPServerInstance.dbauth = dbauth
+try:
+    TCPServerInstance.serve_forever()
+except KeyboardInterrupt:
+    pass
+
+print("Exiting")
+
+# EOF
