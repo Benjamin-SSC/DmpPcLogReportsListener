@@ -44,8 +44,6 @@ def parseMessage(msg_list:list):
                  message_dict[parsedField['fieldtype']] = []
             message_dict[parsedField['fieldtype']] += [parsedField]
 
-    print(json.dumps(message_dict, indent=2))
-
     return message_dict
 
 # Parse a field, and then handle it by type
@@ -61,7 +59,7 @@ def parseField(field:str):
         dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
     else:
         print(f"WARNING: Field Identifier '{field_ident}' is not defined!")
-        
+
     if field_ident == "t":
         field_dict = parseEventType(field)
     else:
