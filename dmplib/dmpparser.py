@@ -56,70 +56,30 @@ def parseField(field:str):
     field_ident = field[0]
     field = field[1:]
 
-    match field_ident:
-        case "a":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "b":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "c":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "d":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "e":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "g":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "h":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "i":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "n":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "p":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "s":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-        case "t":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-            field_dict = parseEventType(field)
-        case "u":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-            field_dict = parseUser(field)
-        case "v":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-            field_dict = parseDevice(field)
-        case "z":
-            dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
-            field_dict = parseZone(field)
-        case _:
-            print(f"ERROR: Unknown Field '{field_ident}'")
+    event_desc = dmpstaticdata.field_ident_map.get(field_ident)
+    if event_desc:
+        dmputils.debugPrint(f"Processing '{field_ident}' as '{dmpstaticdata.field_ident_map[field_ident]}' Field")
+    else:
+        print(f"WARNING: Field Identifier '{field_ident}' is not defined!")
+        
+    if field_ident == "t":
+        field_dict = parseEventType(field)
+    else:
+        field_dict = parseGenericField(field, field_ident)
 
     return field_dict
 
-# Parse the zone (z) field
-def parseZone(field:str):
+# Parse fields that don't require anything special
+def parseGenericField(field:str, type:str):
     field_dict = {}
-    field_dict['fieldtype'] = "z"
-    return field_dict
-
-# Parse a Device (v) field. Return dict
-def parseDevice(field:str):
-    field_dict = {}
-    field_dict['fieldtype'] = "v"
+    field_dict['fieldtype'] = type[0]
     field_dict['qualifier'] = field[0]
     split = field[1:].split("\"")
     field_dict['identifier'] = split[0]
-    field_dict['text'] = split[1]
-    return field_dict
-
-# Parse a User (u) field. Return dict
-def parseUser(field:str):
-    field_dict = {}
-    field_dict['fieldtype'] = "u"
-    field_dict['qualifier'] = field[0]
-    split = field[1:].split("\"")
-    field_dict['identifier'] = split[0]
-    field_dict['text'] = split[1]
+    if len(split) == 2:
+        field_dict['text'] = '"'.join(split[1:])
+    else:
+        field_dict['text'] = ""
     return field_dict
 
 # Parse the Event Type (t) field. Return dict. This one is special.

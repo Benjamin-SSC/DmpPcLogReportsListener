@@ -85,7 +85,6 @@ class PanelReportHandler(socketserver.StreamRequestHandler):
             signaldict['msgdict'] = dmpparser.parseMessage(copy.copy(signaldict['msg']))
 
             dmputils.debugPrint(f"signaldict\n{json.dumps(signaldict, indent = 4)}")
-            #ret = self.insertDbRecord(signaldict)
             ret = dmpdb.insertDbRecord(signaldict, self.server.dbauth)
             if ret:
                 dmputils.debugPrint(f"Successfully inserted signal to DB")
