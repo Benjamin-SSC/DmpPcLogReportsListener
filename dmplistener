@@ -74,6 +74,7 @@ class PanelReportHandler(socketserver.StreamRequestHandler):
                 'crc' : sigcrc,
                 'index' : sigindex,
                 'acct' : sigacct,
+                'eventdef' : sigevent[1],
                 'minago' : sigminago,
                 'msg' : siglist,
                 'rawmsg' : str(data.decode()),

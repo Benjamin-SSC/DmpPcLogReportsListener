@@ -51,12 +51,12 @@ def insertDbRecord(signaldict:dict, dbauth:list):
 
     sql = (
             "INSERT INTO reportsignals "
-            "( uuid, fromip, fromport, accountnumber, minutesago, signaltimestamp, rawmessage ) "
+            "( uuid, accountnumber, signaltimestamp, eventdefinition, fromip, fromport, minutesago, rawmessage ) "
             "VALUES "
-            "( %s, %s, %s, %s, %s, %s, %s )"
+            "( %s, %s, %s, %s, %s, %s, %s, %s )"
         )
     try:
-        db._db_cur.execute(sql, (signaldict['uuid'], fromip.exploded, signaldict['port'], signaldict['acct'], signaldict['minago'], signaltime.strftime('%Y-%m-%d %H:%M:%S'), signaldict['rawmsg']))
+        db._db_cur.execute(sql, (signaldict['uuid'], signaldict['acct'], signaltime.strftime('%Y-%m-%d %H:%M:%S'), signaldict['eventdef'], fromip.exploded, signaldict['port'], signaldict['minago'], signaldict['rawmsg']))
         db._db_connection.commit()
         result = db._db_cur.fetchwarnings()
     except db_module.Error as err:

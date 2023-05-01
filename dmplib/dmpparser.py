@@ -29,20 +29,10 @@ def parseMessage(msg_list:list):
 
         parsedField = parseField(msg_field)
 
-        # If the returned field is an Event Type, this info is stored as keys in the dict
-        if parsedField['fieldtype'] == 't' and not 't' in message_dict.keys():
-            message_dict['event_type'] = parsedField['event_type']
-            message_dict['event_qualifier'] = parsedField['qualifier']
-            message_dict['event_istext'] = parsedField['istext']
-        elif parsedField['fieldtype'] == 't' and not 't' in message_dict.keys():
-            # WTFOMGBBQ - WE SHOULD NOT BE HERE!
-            print(f"I'VE RECEIEVED A SECOND EVENT TYPE FOR THE SAME SIGNAL!!! WE SHOULD NOT BE HERE! I'M QUITTING!")
-            quit()
-        else:
-             # If it's any other type, we add it to a list under the key of it's type.
-            if not parsedField['fieldtype'] in message_dict.keys():
-                 message_dict[parsedField['fieldtype']] = []
-            message_dict[parsedField['fieldtype']] += [parsedField]
+        # We add it to a list under the key of it's type.
+        if not parsedField['fieldtype'] in message_dict.keys():
+            message_dict[parsedField['fieldtype']] = []
+        message_dict[parsedField['fieldtype']] += [parsedField]
 
     return message_dict
 
@@ -60,40 +50,16 @@ def parseField(field:str):
     else:
         print(f"WARNING: Field Identifier '{field_ident}' is not defined!")
 
-    if field_ident == "t":
-        field_dict = parseEventType(field)
-    else:
-        field_dict = parseGenericField(field, field_ident)
-
-    return field_dict
-
-# Parse fields that don't require anything special
-def parseGenericField(field:str, type:str):
-    field_dict = {}
-    field_dict['fieldtype'] = type[0]
+    field_dict['fieldtype'] = field_ident
     field_dict['qualifier'] = field[0]
     split = field[1:].split("\"")
     field_dict['identifier'] = split[0]
+
     if len(split) == 2:
         field_dict['text'] = '"'.join(split[1:])
     else:
         field_dict['text'] = ""
-    return field_dict
 
-# Parse the Event Type (t) field. Return dict. This one is special.
-def parseEventType(field:str):
-    istext = False
-    if field[1] == '"':
-        istext = True
-        eventtype = field[2:]
-    else:
-        eventtype = field[1:]
-
-    field_dict = {}
-    field_dict['fieldtype'] = "t"
-    field_dict['qualifier'] = field[0]
-    field_dict['event_type'] = eventtype
-    field_dict['istext'] = str(istext)
     return field_dict
 
 # EOF
