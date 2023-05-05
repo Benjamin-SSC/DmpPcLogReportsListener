@@ -7,6 +7,7 @@ import uuid
 import copy
 import sys
 import argparse
+import datetime
 from argparse import ArgumentParser
 from dmplib import dmpparser
 from dmplib import dmputils
@@ -90,7 +91,7 @@ class PanelReportHandler(socketserver.StreamRequestHandler):
             if ret:
                 dmputils.debugPrint(f"Successfully inserted signal to DB")
                 self.wfile.write(b'\x02' + signaldict["acct"].encode() + b'\x06' + b'\x0D')
-                print(f"Processed '{sigevent}' from account '{signaldict['acct'].strip().zfill(5)}'.")
+                print(f"{datetime.datetime.now().strftime('%Y%M%d_%H%M%S')} - Acct:{signaldict['acct'].strip().zfill(5)} Event:{sigevent} Signal:{signaldict['rawmsg']}")
             dmputils.debugPrint(ret)
 
 # Handle environment variables, and set defaults for the argument parser
